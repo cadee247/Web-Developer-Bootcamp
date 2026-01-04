@@ -1,0 +1,32 @@
+// prisma/schema.prisma
+
+// Generates the Prisma Client for interacting with the database
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Defines the database connection using SQLite and environment variable for the URL
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User model representing application users
+model User {
+  id        Int      @id @default(autoincrement()) // Primary key, auto-incremented
+  name      String?                              // Optional name field
+  email     String   @unique                     // Unique email address
+  password  String                               // Hashed password for authentication
+  tasks     Task[]                               // One-to-many relation: a user can have many tasks
+  createdAt DateTime @default(now())             // Timestamp of user creation, defaults to current time
+}
+
+// Task model representing individual tasks
+model Task {
+  id        Int      @id @default(autoincrement()) // Primary key, auto-incremented
+  title     String                                // Title or description of the task
+  completed Boolean  @default(false)              // Completion status, defaults to false
+  userId    Int                                    // Foreign key referencing User
+  user      User     @relation(fields: [userId], references: [id]) // Relation to User model
+  createdAt DateTime @default(now())              // Timestamp of task creation, defaults to current time
+}
