@@ -1,62 +1,51 @@
 // src/pages/api/auth/[...nextauth].ts
 
-// Import NextAuth core library for authentication handling
 import NextAuth from "next-auth";
-
-// Import the Credentials provider (username/password style login)
 import CredentialsProvider from "next-auth/providers/credentials";
-
-// Import Prisma client instance for database queries
 import { prisma } from "../../../server/db";
-
-// Import bcrypt for secure password hashing and comparison
 import bcrypt from "bcryptjs";
 
-// Define NextAuth configuration options
 export const authOptions = {
-  // Configure authentication providers
   providers: [
     CredentialsProvider({
-      name: "Credentials", // Label for the provider
+      name: "Credentials",
       credentials: {
-        email: { label: "Email", type: "text" },       // Email input field
-        password: { label: "Password", type: "password" }, // Password input field
+        email: { label: "Email", type: "text" },
+        password: { label: "Password", type: "password" },
       },
-      // Custom authorization logic for validating user credentials
       async authorize(credentials) {
-        // Ensure both email and password are provided
         if (!credentials?.email || !credentials?.password) return null;
 
-        // Look up user by email in the database
+        // Fetch user from the database
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
         });
 
-        // If no user is found, deny access
         if (!user) return null;
 
-        // Compare provided password with hashed password in DB
-        const valid = await bcrypt.compare(credentials.password, user.password);
+        // Verify password
+        const isValid = await bcrypt.compare(credentials.password, user.password);
+        if (!isValid) return null;
 
-        // If password is invalid, deny access
-        if (!valid) return null;
-
-        // If valid, return the user object (this becomes part of the session)
-        return user;
+        // Return only the fields expected by NextAuth
+        return {
+          id: user.id.toString(), // <-- convert to string
+          name: user.name,
+          email: user.email,
+        };
       },
     }),
   ],
 
-  // Configure session handling
   session: {
-    strategy: "jwt", // Use JSON Web Tokens instead of database sessions
+    strategy: "jwt",
   },
 
-  // Custom pages for authentication flow
   pages: {
-    signIn: "/login", // Redirect users to custom login page
+    signIn: "/login",
   },
+
+  secret: process.env.NEXTAUTH_SECRET,
 };
 
-// Export NextAuth with the defined options
 export default NextAuth(authOptions);
