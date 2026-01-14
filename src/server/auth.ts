@@ -1,49 +1,58 @@
-// src/server/auth.ts
 import NextAuth from "next-auth";
+import type { AuthOptions, User } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "../db/client";
 import bcrypt from "bcryptjs";
 
-// NextAuth configuration options
-export const authOptions = {
+// Secret for JWT
+const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || "randomfallbacksecret";
+
+// Define a User type that NextAuth expects
+interface MyUser extends User {
+  id: string; // id must be string
+  name: string | null;
+  email: string | null;
+}
+
+export const authOptions: AuthOptions = {
   providers: [
-    // Credentials provider allows login with email + password
     CredentialsProvider({
       name: "Credentials",
       credentials: {
-        email: { label: "Email", type: "text" },       // login form field for email
-        password: { label: "Password", type: "password" }, // login form field for password
+        email: { label: "Email", type: "text" },
+        password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
-        // Ensure both email and password are provided
+      async authorize(
+        credentials: Record<"email" | "password", string> | undefined
+      ): Promise<MyUser | null> {
         if (!credentials?.email || !credentials?.password) return null;
 
-        // Look up user in database by email
+        // Fetch user from database
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
         });
-
-        // If no user found, return null (login fails)
         if (!user) return null;
 
-        // Compare provided password with hashed password in DB
-        const isValid = await bcrypt.compare(credentials.password, user.password);
+        // Verify password
+        const valid = await bcrypt.compare(credentials.password, user.password);
+        if (!valid) return null;
 
-        // If password is invalid, return null (login fails)
-        if (!isValid) return null;
-
-        // If valid, return user object (login succeeds)
-        return user;
+        // ✅ Return only what NextAuth expects, id as string
+        return {
+          id: user.id.toString(),
+          name: user.name,
+          email: user.email,
+        };
       },
     }),
   ],
-
-  // Use JWT-based sessions instead of database sessions
-  session: { strategy: "jwt" },
-
-  // Custom sign-in page route
-  pages: { signIn: "/login" },
+  session: {
+    strategy: "jwt",
+  },
+  pages: {
+    signIn: "/login",
+  },
+  secret: NEXTAUTH_SECRET,
 };
 
-// Export configuration for NextAuth
-export default authOptions;
+export default NextAuth(authOptions);

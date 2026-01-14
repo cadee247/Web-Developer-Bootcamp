@@ -1,13 +1,18 @@
 // src/pages/register.ts
-
-// Import Prisma client instance for database queries
+import type { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "../../server/db";
-
-// Import bcrypt for secure password hashing
 import bcrypt from "bcryptjs";
 
+// Define the shape of the response
+type ResponseData =
+  | { message: string; userId?: number }
+  | { error: string };
+
 // Default export: API route handler for user registration
-export default async function handler(req, res) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse<ResponseData>
+) {
   // Only allow POST requests; reject others with 405 Method Not Allowed
   if (req.method !== "POST") return res.status(405).end();
 
@@ -22,7 +27,6 @@ export default async function handler(req, res) {
   // Check if a user with the same email already exists
   const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser) {
-    // Conflict: user already registered with this email
     return res.status(409).json({ error: "User already exists" });
   }
 

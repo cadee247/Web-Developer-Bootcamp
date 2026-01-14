@@ -1,11 +1,22 @@
 // src/pages/api/auth/[...nextauth].ts
 
 import NextAuth from "next-auth";
+import type { AuthOptions, User } from "next-auth"; // type-only import
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "../../../server/db";
 import bcrypt from "bcryptjs";
 
-export const authOptions = {
+// Secret for JWT signing
+const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || "randomfallbacksecret";
+
+// ✅ Define a type that matches what NextAuth expects
+interface MyUser extends User {
+  id: string; // id must be string
+  name: string | null;
+  email: string | null;
+}
+
+export const authOptions: AuthOptions = {
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -13,39 +24,36 @@ export const authOptions = {
         email: { label: "Email", type: "text" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+async authorize(
+  credentials: Record<"email" | "password", string> | undefined
+): Promise<User | null> {
+  if (!credentials?.email || !credentials?.password) return null;
 
-        // Fetch user from the database
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-        });
+  const user = await prisma.user.findUnique({
+    where: { email: credentials.email },
+  });
+  if (!user) return null;
 
-        if (!user) return null;
+  const valid = await bcrypt.compare(credentials.password, user.password);
+  if (!valid) return null;
 
-        // Verify password
-        const isValid = await bcrypt.compare(credentials.password, user.password);
-        if (!isValid) return null;
+  // Return a new object that matches NextAuth's User type
+  return {
+    id: user.id.toString(), // ✅ convert number to string
+    name: user.name,
+    email: user.email,
+  };
+}
 
-        // Return only the fields expected by NextAuth
-        return {
-          id: user.id.toString(), // <-- convert to string
-          name: user.name,
-          email: user.email,
-        };
-      },
     }),
   ],
-
   session: {
-    strategy: "jwt",
+    strategy: "jwt", // literal type is fine
   },
-
   pages: {
     signIn: "/login",
   },
-
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: NEXTAUTH_SECRET,
 };
 
 export default NextAuth(authOptions);
